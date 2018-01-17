@@ -6,13 +6,23 @@
 #define MAX_REQ_COURSES 25
 #define MAX_COURSES 25
 #define MAX_PREREQS 5
-#define MAX_COURSE_NAME_LEN 21
-#define MAX_PREREQ_LINE_LEN 126
+#define MAX_COURSE_NAME_LEN 22
+#define MAX_PREREQ_LINE_LEN 130
 #define SET_STR_FLAG "0"
 #define CLEAR_STR_FLAG "1"
 #define MAX_YEARS 10
 #define MAX_QUARTERS 30
 #define QUARTERS 3
+
+struct Year {
+    int num;
+    char fall[MAX_COURSES][MAX_COURSE_NAME_LEN];
+    char winter[MAX_COURSES][MAX_COURSE_NAME_LEN];
+    char spring[MAX_COURSES][MAX_COURSE_NAME_LEN];
+    int fall_count;
+    int winter_count;
+    int spring_count;
+};
 
 void newline_to_terminal(char* str);
 
@@ -22,7 +32,6 @@ int main(int argc, char *argv[]) {
     char *req_file = argv[3];
     char req_courses[MAX_REQ_COURSES][MAX_COURSE_NAME_LEN + 2];
     FILE *curr_file;
-    char buff[255];
     int req_courses_len = 0; // req_courses_len is the size of req_courses
     char prereq_line[MAX_PREREQ_LINE_LEN + 1];
     char courses_to_take[MAX_COURSES][MAX_PREREQS + 3][MAX_COURSE_NAME_LEN + 2];
@@ -39,6 +48,9 @@ int main(int argc, char *argv[]) {
     int winter_count = 0;
     int spring_count = 0;
     char offering_line[MAX_COURSE_NAME_LEN + 2];
+    struct Year schedule[MAX_YEARS];
+    int year_count;
+    int last_quarter_count;
 
     //open req
     curr_file = fopen(req_file,"r");
@@ -126,7 +138,6 @@ int main(int argc, char *argv[]) {
     //open offerings
     curr_file = fopen(offering_file, "r");
 
-    //@TODO: Read and store offerings
     /*
     while (fgets(offering_line, MAX_COURSE_NAME_LEN + 2, curr_file) != NULL) {
         int len = strlen(offering_line);
@@ -178,7 +189,7 @@ int main(int argc, char *argv[]) {
     //close offerings
     fclose(curr_file);
 
-    //@TODO: Generate courses_to_take
+    // Generate courses_to_take
     for (int i = 0; i < courses_to_take_courselen; ++i) {
         char* target = courses_to_take[i][1];
         int target_prereq_num = atoi(courses_to_take[i][2]);
@@ -215,6 +226,7 @@ int main(int argc, char *argv[]) {
         itoa(target_prereq_num,courses_to_take[i][2], 10); //reassign prereq count to courses_to_take
     }
 
+    /*
     //test courses_to_take
     for (int i = 0; i < courses_to_take_courselen; ++i) {
         int prereq_num = atoi(courses_to_take[i][2]);
@@ -224,8 +236,149 @@ int main(int argc, char *argv[]) {
         }
         printf("\n");
     }
+     */
 
-    //@TODO: Generate Schedule
+
+    //initialize schedule
+    for (int i = 0; i < MAX_YEARS; ++i) {
+        schedule[i].num = i;
+        schedule[i].fall_count = 0;
+        schedule[i].winter_count = 0;
+        schedule[i].spring_count = 0;
+    }
+
+    //Generate Schedule
+    for (int i = 1; i <= MAX_YEARS; ++i) {
+        for (int j = 1; j <= QUARTERS; ++j) {
+            //(1) Check to see if done
+            if (courses_to_take_courselen != taken_len) {
+
+                //(2) Clear prereqs
+                for (int k = 0; k < courses_to_take_courselen; ++k) { //check col 2
+                    int prereq_num = atoi(courses_to_take[k][2]);
+                    while (prereq_num > 0) { //while > 0, keep track of # and start moving horizontally
+                        char* curr_prereq = courses_to_take[k][3];
+                        int exists = 0;
+                        //search taken to see if prereq exists
+                        for (int x = 0; x < taken_len; ++x) {
+                            if (strcmp(curr_prereq, taken[x]) == 0) {
+                                exists = 1;
+                                --prereq_num;
+                                //shift prereq over
+                                if (prereq_num > 0) {
+                                    strcpy(courses_to_take[k][3], courses_to_take[k][3 + prereq_num]);
+                                }
+                            }
+                        }
+                        if (!exists) {
+                            break;
+                        }
+                    }
+                    itoa(prereq_num, courses_to_take[k][2], 10);
+                }
+
+                //(3) add courses to schedule
+                for (int k = 0; k < courses_to_take_courselen; ++k) {
+                    //if col 0 == 0, then check col 2, if 0 add to schedule, set col 0 to 1,
+                    //add to taken, inc taken_len
+                    if (strcmp(courses_to_take[k][0], "0") == 0 && strcmp(courses_to_take[k][2], "0") == 0) {
+                        //check to see if course is being offered in current quarter, if so add
+                        switch(j) {
+                            case 1:
+                                for (int x = 0; x < fall_count; ++x) {
+                                    if (strcmp(courses_to_take[k][1], fall_offerings[x]) == 0) {
+                                        strcpy(schedule[i - 1].fall[schedule[i - 1].fall_count++], courses_to_take[k][1]);
+                                        //set col 0 to 1
+                                        strcpy(courses_to_take[k][0], "1");
+                                        //add to taken and inc taken_len
+                                        strcpy(taken[taken_len++], courses_to_take[k][1]);
+                                    }
+                                }
+                                break;
+                            case 2:
+                                for (int x = 0; x < winter_count; ++x) {
+                                    if (strcmp(courses_to_take[k][1], winter_offerings[x]) == 0) {
+                                        strcpy(schedule[i - 1].winter[schedule[i - 1].winter_count++], courses_to_take[k][1]);
+                                        //set col 0 to 1
+                                        strcpy(courses_to_take[k][0], "1");
+                                        //add to taken and inc taken_len
+                                        strcpy(taken[taken_len++], courses_to_take[k][1]);
+                                    }
+                                }
+                                break;
+                            case 3:
+                                for (int x = 0; x < spring_count; ++x) {
+                                    if (strcmp(courses_to_take[k][1], spring_offerings[x]) == 0) {
+                                        strcpy(schedule[i - 1].spring[schedule[i - 1].spring_count++], courses_to_take[k][1]);
+                                        //set col 0 to 1
+                                        strcpy(courses_to_take[k][0], "1");
+                                        //add to taken and inc taken_len
+                                        strcpy(taken[taken_len++], courses_to_take[k][1]);
+                                    }
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+    /*
+    //nulling fall
+    for (int x = 0; x <= MAX_YEARS; ++x) {
+
+    }
+    for (int i = 0; i < MAX_COURSES; ++i) {
+        for (int j = 0; j < MAX_COURSE_NAME_LEN; ++j) {
+            schedule
+        }
+    }
+     */
+    //output schedule
+    int taken_num = taken_len; //@Problem: for loop ints have to be declared outside?
+    for (int i = 1; i <= MAX_YEARS; ++i) {
+        for (int j = 1; j <= QUARTERS; ++j) {
+            if (taken_num > 0) {
+                switch (j) {
+                    case 1:
+                        if (schedule[i - 1].fall_count > 0) {
+                            printf("%d %d", i, j);
+                            for (int x = 0; x < schedule[i - 1].fall_count; ++x) {
+                                printf(" %s", schedule[i - 1].fall[x]);
+                                --taken_num;
+                            }
+                            printf("\n");
+                        }
+                        break;
+                    case 2:
+                        if (schedule[i - 1].winter_count > 0) {
+                            printf("%d %d", i, j);
+                            for (int x = 0; x < schedule[i - 1].winter_count; ++x) {
+                                printf(" %s", schedule[i - 1].winter[x]);
+                                --taken_num;
+                            }
+                            printf("\n");
+                        }
+                        break;
+                    case 3:
+                        if (schedule[i - 1].spring_count > 0) {
+                            printf("%d %d", i, j);
+                            for (int x = 0; x < schedule[i - 1].spring_count; ++x) {
+                                printf(" %s", schedule[i - 1].spring[x]);
+                                --taken_num;
+                            }
+                            printf("\n");
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
 
     return 0;
 }
